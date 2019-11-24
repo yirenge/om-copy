@@ -1,0 +1,17 @@
+{
+  "name": "om-copy",
+  "version": "1.0.0",
+  "description": "copy files but omit some.",
+  "main": "index.js",
+  "dependencies": {
+    "fs-extra": "^8.1.0",
+    "multi-glob": "^1.0.2"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "start":"node start.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "brainee",
+  "license": "MIT"
+}
