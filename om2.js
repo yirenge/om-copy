@@ -17,16 +17,18 @@ function om() { }
  * @param {array} exclude - The glob input for the paths to be excluded.
  * @return {Promise} - Resolve: return nothing. reject: return err.
  */
-om.copy = function (source, destination, exclude,option) {
+om.copy = function (source, destination,option) {
   om.start = new Date();
   /**
    * Module Constructor
    */
   return new Promise(function (resolve, reject) {
-    om.makePathsTask(source, exclude,option)
+    om.makePathsTask(source,option)
       .then(function (srcPaths) {
-        om.copyTask(srcPaths, source, destination)
+        console.log("[copy]paths[0]=",srcPaths[0]);
+        om.copyTask(srcPaths, option.cwd, destination)
           .then(function (msg) {
+            console.log("\n[copy]total time(ms):",new Date() - om.start);
             resolve(msg);
           }).catch(function (err) {
             reject(err);
@@ -35,6 +37,23 @@ om.copy = function (source, destination, exclude,option) {
   });
 };
 
+om.fullPaths = function (input,source) {
+  return new Promise(function (resolve) {
+    var output = [];
+    var i = 0;
+    if (input.length === 0) {
+      resolve(output);
+    } else {
+      input.forEach(function (curInput) {
+        i++;
+        output.push(path.join(source,curInput));
+        if (i >= input.length) {
+          resolve(output);
+        }
+      });
+    }
+  });
+};
 /**
  * Make Paths Task.
  * Convert Glob input to real path arr.
@@ -45,27 +64,21 @@ om.copy = function (source, destination, exclude,option) {
  * @param {array|regex} exclude - The glob input for the paths to be excluded.
  * @return {Promise} - resolve: returns Array of paths to be copied. reject: returns err.
  */
-om.makePathsTask = function (source, exclude,option) {
+om.makePathsTask = function (source,option) {
 
   /**
    * Make Paths Task Constructor
    *
    */
-  var isExcludeRegex=false;
-  if(option){
-    isExcludeRegex=true;
-    option.ignore=option.ignore;
-  }
-  if (isExcludeRegex) {
-    return om.makePathsWithIgnore(source, option);
-  } else {
-    return om.makePathsWithGlobExclude(source, exclude);
-  }
+
+  return om.makePathsWithIgnore(source, option).then((paths)=>{
+    return om.fullPaths(paths,option.cwd);
+  });
 };
 om.makePathsWithIgnore = function (source, option) {
   return new Promise(function (resolve, reject) {
     om.makePathsFromGlob(source, option).then(function (paths) {//[source1,source2,souce3]
-      console.log("[makePathsWithIgnore]paths=",paths.length);
+      console.log("[makePathsWithIgnore]paths[0]=",paths[0]);
       
       return om.normalizePaths(paths).then(function (paths) {
         resolve(paths);
@@ -76,26 +89,6 @@ om.makePathsWithIgnore = function (source, option) {
   });
 }
 
-om.makePathsWithGlobExclude = function (source, exclude) {
-  return new Promise(function (resolve, reject) {
-    Promise.all([
-      om.makePathsFromGlob(source),
-      om.makePathsFromGlob(exclude)
-    ]).then(function (paths) {
-      console.log("[makePathsWithGlobExclude]paths=",paths[0].length);
-      return Promise.all([
-        om.normalizePaths(paths[0]),
-        om.normalizePaths(paths[1])
-      ]).then(function (result) {
-        return result;
-      });
-    }).then(function (paths) {
-      resolve(om.filterExcludeFromSource(paths[0], paths[1]));
-    }).catch(function (err) {
-      reject(err);
-    });
-  });
-}
 
 /**
  * Copy Task.
@@ -123,12 +116,12 @@ om.copyTask = function (srcPaths, source, destination) {
    * CopyTask Function Constructor
    *
    */
-  source = path.dirname(source);
+  // source = path.dirname(source);
   source = path.normalize(source);
   destination = path.normalize(destination);
 
   return new Promise(function (resolve) {
-    for (var i = 0; i <= srcPaths.length - 1; i++) {
+    for (var i = 0; i < srcPaths.length; i++) {
       var curSrc = srcPaths[i];
       var curDest = makeDestPath(curSrc, source, destination);
       if (fs.statSync(curSrc).isFile()) {
@@ -137,14 +130,14 @@ om.copyTask = function (srcPaths, source, destination) {
           fs.copySync(curSrc, curDest, { clobber: true });
           if (i % 100 === 0) {
             console.log("[copyTask.promise]start copy the", i / 100, "th 100 files.run(ms):", new Date() - om.start);
-            console.log("[copyTask.promise]this batch last file is:" + curDest);
+            console.log("[copyTask.promise]"+i / 100+" batch last file:" + curDest);
           }
         }
       } else {
         fs.ensureDirSync(curDest);
       }
-      if (i >= srcPaths.length - 1) {
-        var msg = `${i} 个files，Copy done...\n`;
+      if (i >= srcPaths.length-1) {
+        var msg = `${i+1} 个files，Copy done...\n`;
         console.log(msg);
         resolve(msg);
       }
@@ -156,13 +149,15 @@ om.copyTask = function (srcPaths, source, destination) {
  * Convert glob input into paths.
  *
  * @param {array|string} input - Glob input.
+ * @param {object} option - Glob option.
  * @return {Promise} - resolve: returns array with paths. reject: returns err.
    */
-om.makePathsFromGlob = function (input) {
+om.makePathsFromGlob = function (input,option) {
   return new Promise(function (resolve, reject) {
-    glob(input, function (err, paths) {
+    console.log("[makePathsFromGlob]input=",input,"option=",option);
+    glob(input, option,function (err, paths) {
       if (err) reject(err);
-      console.log("[makePathsFromGlob]paths=",paths);
+      console.log("[makePathsFromGlob]paths=",paths.length);
       resolve(paths);
     });
   });
@@ -207,11 +202,11 @@ om.filterExcludeFromSource = function (source, exclude) {
 om.copyWithConfig = function (configPath = "./config.js") {
   if (fs.existsSync(configPath)) {
     var config = require(configPath);
-    var { source, destination, exclude,option } = config;
+    var { source, destination,option } = config;
     if (source && destination) {
       console.log("[copyWithConfig]start. config=", config);
 
-      return om.copy(source, destination, exclude,option);
+      return om.copy(source, destination,option);
     }
   }
 }
