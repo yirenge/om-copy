@@ -52,21 +52,21 @@ om.makePathsTask = function (source, exclude,option) {
    *
    */
   var isExcludeRegex=false;
-  if(exclude instanceof RegExp){
+  if(option){
     isExcludeRegex=true;
-  }else if(option){
-    isExcludeRegex=true;
-    option.ignore=option.ignore||exclude;
+    option.ignore=option.ignore;
   }
   if (isExcludeRegex) {
-    return om.makePathsWithRegexExclude(source, option);
+    return om.makePathsWithIgnore(source, option);
   } else {
     return om.makePathsWithGlobExclude(source, exclude);
   }
 };
-om.makePathsWithRegexExclude = function (source, option) {
+om.makePathsWithIgnore = function (source, option) {
   return new Promise(function (resolve, reject) {
     om.makePathsFromGlob(source, option).then(function (paths) {//[source1,source2,souce3]
+      console.log("[makePathsWithIgnore]paths=",paths.length);
+      
       return om.normalizePaths(paths).then(function (paths) {
         resolve(paths);
       })
@@ -82,6 +82,7 @@ om.makePathsWithGlobExclude = function (source, exclude) {
       om.makePathsFromGlob(source),
       om.makePathsFromGlob(exclude)
     ]).then(function (paths) {
+      console.log("[makePathsWithGlobExclude]paths=",paths[0].length);
       return Promise.all([
         om.normalizePaths(paths[0]),
         om.normalizePaths(paths[1])
@@ -161,6 +162,7 @@ om.makePathsFromGlob = function (input) {
   return new Promise(function (resolve, reject) {
     glob(input, function (err, paths) {
       if (err) reject(err);
+      console.log("[makePathsFromGlob]paths=",paths);
       resolve(paths);
     });
   });
@@ -207,7 +209,7 @@ om.copyWithConfig = function (configPath = "./config.js") {
     var config = require(configPath);
     var { source, destination, exclude,option } = config;
     if (source && destination) {
-      console.log("[copyWithConfig]config=", config);
+      console.log("[copyWithConfig]start. config=", config);
 
       return om.copy(source, destination, exclude,option);
     }
